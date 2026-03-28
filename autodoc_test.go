@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"autodoc"
+	"github.com/ConradKash/autodoc"
 )
 
 // ─── Schema generator tests ───────────────────────────────────────────────────

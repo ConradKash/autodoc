@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ConradKash/autodoc"
+	autodocgin "github.com/ConradKash/autodoc/gin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -390,7 +391,7 @@ func TestSchema_NullablePointer(t *testing.T) {
 func TestGinAdapter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	doc := autodoc.New(autodoc.Config{Title: "Gin Test", Version: "1.0.0", DocsPath: "/docs", SpecPath: "/openapi.json"})
-	adapter := autodoc.NewGinAdapter(doc)
+	adapter := autodocgin.NewGinAdapter(doc)
 
 	adapter.Handle("GET", "/gin-users", func(c *gin.Context) {
 		c.JSON(200, gin.H{"ok": true})

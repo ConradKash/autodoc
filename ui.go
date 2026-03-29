@@ -1,7 +1,7 @@
 package autodoc
 
-// swaggerUIHTML is a complete Swagger UI page loaded from the official CDN.
-const swaggerUIHTML = `<!DOCTYPE html>
+// SwaggerUIHTML is a complete Swagger UI page loaded from the official CDN.
+const SwaggerUIHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -237,8 +237,8 @@ const swaggerUIHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
-// redocHTML is a full ReDoc page.
-const redocHTML = `<!DOCTYPE html>
+// RedocHTML is a full ReDoc page.
+const RedocHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">

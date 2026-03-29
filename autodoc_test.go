@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ConradKash/autodoc"
+	"github.com/gin-gonic/gin"
 )
 
 // ─── Schema generator tests ───────────────────────────────────────────────────
@@ -383,6 +384,81 @@ func TestSchema_NullablePointer(t *testing.T) {
 	optProp, _ := props["optional"].(map[string]interface{})
 	if optProp["nullable"] != true {
 		t.Error("pointer field should be marked nullable")
+	}
+}
+
+func TestGinAdapter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	doc := autodoc.New(autodoc.Config{Title: "Gin Test", Version: "1.0.0", DocsPath: "/docs", SpecPath: "/openapi.json"})
+	adapter := autodoc.NewGinAdapter(doc)
+
+	adapter.Handle("GET", "/gin-users", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ok": true})
+	}, autodoc.WithResponseOf[OrderResponse]())
+
+	adapter.Handle("POST", "/gin-users", func(c *gin.Context) {
+		var req CreateOrderRequest
+		_ = c.ShouldBindJSON(&req)
+		c.JSON(201, gin.H{"id": "abc"})
+	}, autodoc.WithRequestOf[CreateOrderRequest](), autodoc.WithResponseOf[OrderResponse](), autodoc.WithStatusCode(201))
+
+	adapter.Handle("GET", "/gin-users/:id", func(c *gin.Context) {
+		c.JSON(200, gin.H{"id": c.Param("id")})
+	})
+
+	adapter.Mount()
+	r := adapter.Engine
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// Check OpenAPI spec endpoint
+	resp, err := http.Get(ts.URL + "/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("want 200, got %d", resp.StatusCode)
+	}
+	var spec map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&spec); err != nil {
+		t.Fatal("invalid JSON:", err)
+	}
+	paths, _ := spec["paths"].(map[string]interface{})
+	if _, ok := paths["/gin-users"]; !ok {
+		t.Error("expected /gin-users in spec")
+	}
+	if _, ok := paths["/gin-users/{id}"]; !ok {
+		t.Error("expected /gin-users/{id} in spec")
+	}
+
+	// Check Swagger UI endpoint
+	resp2, err := http.Get(ts.URL + "/docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != 200 {
+		t.Errorf("want 200, got %d", resp2.StatusCode)
+	}
+	ct := resp2.Header.Get("Content-Type")
+	if ct != "text/html; charset=utf-8" {
+		t.Errorf("unexpected content-type: %s", ct)
+	}
+
+	// Check path parameter documentation
+	item, _ := paths["/gin-users/{id}"].(map[string]interface{})
+	getOp, _ := item["get"].(map[string]interface{})
+	params, _ := getOp["parameters"].([]interface{})
+	foundID := false
+	for _, p := range params {
+		pm, _ := p.(map[string]interface{})
+		if pm["name"] == "id" && pm["in"] == "path" {
+			foundID = true
+		}
+	}
+	if !foundID {
+		t.Error("expected path parameter 'id' documented for /gin-users/{id}")
 	}
 }
 

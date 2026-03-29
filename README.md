@@ -50,6 +50,34 @@ http.ListenAndServe(":8080", mux)
 
 See [autodoc.go](autodoc.go) and [autodoc_test.go](autodoc_test.go) for advanced usage and examples.
 
+## Gin Framework Integration
+
+autodoc now supports the Gin framework via `GinAdapter`:
+
+```go
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/ConradKash/autodoc"
+)
+
+doc := autodoc.New(autodoc.Config{Title: "Gin API", Version: "1.0.0"})
+ginAdapter := autodoc.NewGinAdapter(doc)
+
+ginAdapter.Handle("GET", "/users", func(c *gin.Context) {
+    // handler code
+}, autodoc.WithResponseOf[UserResponse]())
+
+ginAdapter.Handle("POST", "/users", func(c *gin.Context) {
+    // handler code
+}, autodoc.WithRequestOf[CreateUserRequest](), autodoc.WithResponseOf[UserResponse]())
+
+ginAdapter.Mount()
+
+ginAdapter.Engine.Run(":8080")
+```
+
+This will auto-document all registered Gin routes, just like with http.ServeMux.
+
 ## Contributing
 
 Contributions are welcome! Please open issues or pull requests on GitHub. Ensure your code is tested (`go test ./...`) and follows idiomatic Go style.

@@ -148,6 +148,56 @@ chiAdapter.Mount()
 http.ListenAndServe(":8080", router)
 ```
 
+## Serving Swagger UI and ReDoc
+
+Once autodoc is mounted, you get interactive API documentation out of the box:
+
+- **Swagger UI**: [http://localhost:8080/docs](http://localhost:8080/docs)
+- **ReDoc**: [http://localhost:8080/docs/redoc](http://localhost:8080/docs/redoc)
+- **OpenAPI Spec (JSON)**: [http://localhost:8080/openapi.json](http://localhost:8080/openapi.json)
+
+### How it works
+
+- autodoc serves the Swagger UI and ReDoc HTML dynamically using Go templates (no static files required).
+- If a static OpenAPI spec is present in the default folder, it will be served. Otherwise, autodoc will generate the spec on the fly.
+- The UI endpoints are always up-to-date with your registered routes and types.
+
+### Customizing the Docs
+
+You can customize the title, version, and other metadata via `autodoc.Config`:
+
+```go
+mux := http.NewServeMux()
+doc := autodoc.New(autodoc.Config{
+    Title:   "My API",
+    Version: "2.0.0",
+    DocsPath: "/api/docs",      // default: /docs
+    ReDocPath: "/api/redoc",    // default: /docs/redoc
+    SpecPath: "/api/openapi.json", // default: /openapi.json
+})
+doc.Mount(mux)
+```
+
+### Advanced: Serving the HTML Yourself
+
+If you want to serve the Swagger UI HTML from your own handler:
+
+```go
+http.HandleFunc("/mydocs", func(w http.ResponseWriter, r *http.Request) {
+    autodoc.ServeSwaggerUI(w, r)
+})
+```
+
+Or use the exported template:
+
+```go
+w.Write([]byte(autodoc.SwaggerUIHTML))
+```
+
+### Testing
+
+See `swaggerui_template_test.go` for tests that verify the Swagger UI HTML template renders correctly with various data.
+
 ## Build-Time Code Generation
 
 autodoc includes a `go:generate` CLI that scans your router registration code at build time and embeds a static OpenAPI spec — zero runtime cost.

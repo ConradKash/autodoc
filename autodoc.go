@@ -33,7 +33,9 @@ package autodoc
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
+	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -701,16 +703,43 @@ func (a *AutoDoc) ServeSpec(w http.ResponseWriter, r *http.Request) {
 // ServeSwaggerUI serves the Swagger UI HTML page.
 func (a *AutoDoc) ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	replacer := strings.NewReplacer(
-		"{{TITLE}}", a.cfg.Title,
-		"{{SPEC_URL}}", a.cfg.SpecPath,
-	)
-	_, _ = replacer.WriteString(w, SwaggerUIHTML)
+	// Dynamically generate Swagger UI HTML using Go templates
+	data := struct {
+		Title               string
+		SwaggerUICSS        string
+		SwaggerUIBundle     string
+		SwaggerUIStandalone string
+		FaviconHref         string
+		SchemaURL           string
+	}{
+		Title:               a.cfg.Title,
+		SwaggerUICSS:        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+		SwaggerUIBundle:     "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+		SwaggerUIStandalone: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
+		FaviconHref:         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/favicon-32x32.png",
+		SchemaURL:           a.cfg.SpecPath,
+	}
+	tmpl, err := template.New("swaggerui").Parse(SwaggerUITemplate)
+	if err != nil {
+		http.Error(w, "Swagger UI template error", http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.Execute(w, data); err != nil {
+		http.Error(w, "Swagger UI render error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // ServeReDoc serves the ReDoc HTML page.
 func (a *AutoDoc) ServeReDoc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Try to serve static file first
+	staticPath := "./static/redoc.html"
+	if _, err := os.Stat(staticPath); err == nil {
+		http.ServeFile(w, r, staticPath)
+		return
+	}
+	// Fallback to embedded HTML
 	replacer := strings.NewReplacer(
 		"{{TITLE}}", a.cfg.Title,
 		"{{SPEC_URL}}", a.cfg.SpecPath,

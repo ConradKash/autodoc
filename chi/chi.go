@@ -19,6 +19,7 @@ import (
 type ChiAdapter struct {
 	router *chi.Mux
 	doc    *autodoc.AutoDoc
+	prefix string
 }
 
 // NewChiAdapter creates a ChiAdapter.
@@ -28,9 +29,15 @@ func NewChiAdapter(doc *autodoc.AutoDoc, router *chi.Mux) *ChiAdapter {
 
 // Handle registers a handler with documentation options.
 func (a *ChiAdapter) Handle(method, pattern string, handler http.Handler, opts ...autodoc.HandleOption) {
+	fullPattern := a.prefix + pattern
 	a.router.Method(method, pattern, handler)
-	patternStr := method + " " + pattern
+	patternStr := method + " " + fullPattern
 	a.doc.Register(patternStr, opts...)
+}
+
+// Use registers middleware to the adapter.
+func (a *ChiAdapter) Use(middleware func(http.Handler) http.Handler) {
+	a.router.Use(middleware)
 }
 
 // HandleFunc is a convenience wrapper for http.HandlerFunc.
@@ -61,6 +68,20 @@ func (a *ChiAdapter) Patch(pattern string, handler http.HandlerFunc, opts ...aut
 // Delete registers a DELETE handler.
 func (a *ChiAdapter) Delete(pattern string, handler http.HandlerFunc, opts ...autodoc.HandleOption) {
 	a.HandleFunc(http.MethodDelete, pattern, handler, opts...)
+}
+
+// Group creates a sub-router with a common prefix.
+func (a *ChiAdapter) Group(prefix string, fn func(a *ChiAdapter)) {
+	r := chi.NewRouter()
+	fn(&ChiAdapter{router: r, doc: a.doc, prefix: a.currentPrefix(prefix)})
+	a.router.Mount(prefix, r)
+}
+
+func (a *ChiAdapter) currentPrefix(prefix string) string {
+	if a.prefix == "" {
+		return prefix
+	}
+	return a.prefix + prefix
 }
 
 // Mount registers the doc endpoints on the router.

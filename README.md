@@ -18,7 +18,7 @@ autodoc is a Go library that provides **automatic OpenAPI 3.0 documentation gene
 ## Installation
 
 ```
-go get autodoc
+ go get -u github.com/ConradKash/autodoc@latest
 ```
 
 ## Quick Start

@@ -374,15 +374,15 @@ func (a *AutoDoc) Mount(mux *http.ServeMux) {
 	}
 
 	if a.cfg.SpecPath != "" {
-		mux.HandleFunc("GET "+a.cfg.SpecPath, a.serveSpec)
+		mux.HandleFunc("GET "+a.cfg.SpecPath, a.ServeSpec)
 	}
 	if a.cfg.DocsPath != "" {
 		// Serve Swagger UI at /docs and /docs/
-		mux.HandleFunc("GET "+a.cfg.DocsPath, a.serveSwaggerUI)
-		mux.HandleFunc("GET "+a.cfg.DocsPath+"/", a.serveSwaggerUI)
+		mux.HandleFunc("GET "+a.cfg.DocsPath, a.ServeSwaggerUI)
+		mux.HandleFunc("GET "+a.cfg.DocsPath+"/", a.ServeSwaggerUI)
 	}
 	if a.cfg.ReDocPath != "" {
-		mux.HandleFunc("GET "+a.cfg.ReDocPath, a.serveReDoc)
+		mux.HandleFunc("GET "+a.cfg.ReDocPath, a.ServeReDoc)
 	}
 }
 
@@ -641,7 +641,8 @@ func (a *AutoDoc) buildOperation(ri *RouteInfo, schemas map[string]interface{}) 
 
 // ─── HTTP handlers ────────────────────────────────────────────────────────────
 
-func (a *AutoDoc) serveSpec(w http.ResponseWriter, r *http.Request) {
+// ServeSpec serves the OpenAPI JSON spec.
+func (a *AutoDoc) ServeSpec(w http.ResponseWriter, r *http.Request) {
 	b, err := a.SpecJSON()
 	if err != nil {
 		http.Error(w, "failed to generate spec: "+err.Error(), http.StatusInternalServerError)
@@ -653,23 +654,42 @@ func (a *AutoDoc) serveSpec(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 
-func (a *AutoDoc) serveSwaggerUI(w http.ResponseWriter, r *http.Request) {
+// ServeSwaggerUI serves the Swagger UI HTML page.
+func (a *AutoDoc) ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	replacer := strings.NewReplacer(
 		"{{TITLE}}", a.cfg.Title,
 		"{{SPEC_URL}}", a.cfg.SpecPath,
 	)
-	_, _ = replacer.WriteString(w, swaggerUIHTML)
+	_, _ = replacer.WriteString(w, SwaggerUIHTML)
 }
 
-func (a *AutoDoc) serveReDoc(w http.ResponseWriter, r *http.Request) {
+// ServeReDoc serves the ReDoc HTML page.
+func (a *AutoDoc) ServeReDoc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	replacer := strings.NewReplacer(
 		"{{TITLE}}", a.cfg.Title,
 		"{{SPEC_URL}}", a.cfg.SpecPath,
 	)
-	_, _ = replacer.WriteString(w, redocHTML)
+	_, _ = replacer.WriteString(w, RedocHTML)
 }
+
+// Config getters for adapter subpackages.
+
+// GetTitle returns the configured API title.
+func (a *AutoDoc) GetTitle() string { return a.cfg.Title }
+
+// SpecPath returns the configured OpenAPI spec endpoint path.
+func (a *AutoDoc) GetSpecPath() string { return a.cfg.SpecPath }
+
+// DocsPath returns the configured Swagger UI endpoint path.
+func (a *AutoDoc) GetDocsPath() string { return a.cfg.DocsPath }
+
+// ReDocPath returns the configured ReDoc endpoint path.
+func (a *AutoDoc) GetReDocPath() string { return a.cfg.ReDocPath }
+
+// IsEnabled returns whether doc serving is enabled.
+func (a *AutoDoc) IsEnabled() bool { return a.cfg.Enabled != nil && *a.cfg.Enabled }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -52,16 +52,17 @@ See [autodoc.go](autodoc.go) and [autodoc_test.go](autodoc_test.go) for advanced
 
 ## Gin Framework Integration
 
-autodoc now supports the Gin framework via `GinAdapter`:
+autodoc supports the Gin framework via the `autodoc/gin` subpackage:
 
 ```go
 import (
     "github.com/gin-gonic/gin"
     "github.com/ConradKash/autodoc"
+    autodocgin "github.com/ConradKash/autodoc/gin"
 )
 
 doc := autodoc.New(autodoc.Config{Title: "Gin API", Version: "1.0.0"})
-ginAdapter := autodoc.NewGinAdapter(doc)
+ginAdapter := autodocgin.NewGinAdapter(doc)
 
 ginAdapter.Handle("GET", "/users", func(c *gin.Context) {
     // handler code
@@ -76,7 +77,69 @@ ginAdapter.Mount()
 ginAdapter.Engine.Run(":8080")
 ```
 
-This will auto-document all registered Gin routes, just like with http.ServeMux.
+## Chi Framework Integration
+
+autodoc supports the chi router via the `autodoc/chi` subpackage:
+
+```go
+import (
+    "github.com/go-chi/chi/v5"
+    "github.com/ConradKash/autodoc"
+    autodochi "github.com/ConradKash/autodoc/chi"
+)
+
+router := chi.NewRouter()
+doc := autodoc.New(autodoc.Config{Title: "Chi API", Version: "1.0.0"})
+chiAdapter := autodochi.NewChiAdapter(doc, router)
+
+chiAdapter.Get("/users", listUsers, autodoc.WithSummary("List users"))
+chiAdapter.Post("/users", createUser, autodoc.WithRequestOf[CreateUserRequest]())
+chiAdapter.Get("/users/{id}", getUser)
+
+chiAdapter.Mount()
+
+http.ListenAndServe(":8080", router)
+```
+
+## Build-Time Code Generation
+
+autodoc includes a `go:generate` CLI that scans your router registration code at build time and embeds a static OpenAPI spec — zero runtime cost.
+
+### Install the CLI
+
+```bash
+go install github.com/ConradKash/autodoc/cmd/autodoc-gen
+```
+
+### Add a generate directive
+
+In any `.go` file in your project:
+
+```go
+//go:generate autodoc-gen -router=chi -out=docs_gen.go -spec=openapi.json
+```
+
+Then run:
+
+```bash
+go generate ./...
+```
+
+This parses your `r.Get()`, `r.Post()`, `r.Method()` calls (or `mux.HandleFunc("GET /path", ...)` for stdlib) and generates a Go source file with the embedded spec and a static route table.
+
+### CLI flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-router` | Router type: `chi` or `http` | *(required)* |
+| `-out` | Output Go file | `docs_gen.go` |
+| `-spec` | Output OpenAPI JSON file | *(none)* |
+| `-pkg` | Package name | auto-detected |
+| `-title` | API title | `API` |
+| `-version` | API version | `1.0.0` |
+| `-scan` | Comma-separated dirs to scan | `.` |
+| `-docs` | Swagger UI path | `/docs` |
+| `-spec-path` | OpenAPI spec path | `/openapi.json` |
 
 ## Contributing
 
@@ -84,8 +147,50 @@ Contributions are welcome! Please open issues or pull requests on GitHub. Ensure
 
 ## License
 
-Specify your license here (e.g., MIT, Apache 2.0).
+MIT License — see [LICENSE](LICENSE) for details.
 
 ## Support
 
 For questions or support, open an issue on the GitHub repository.
+
+---
+
+## Recent Changes
+
+### Chi build-time docs and compilation fixes
+
+**Structural change — adapters moved to subpackages**
+
+The `GinAdapter` and `ChiAdapter` were previously in `package autodoc` (the root), which meant importing the core library pulled in chi, gin, and all their transitive dependencies. They are now in separate subpackages:
+
+- `github.com/ConradKash/autodoc/chi` — chi adapter (pulls in chi only)
+- `github.com/ConradKash/autodoc/gin` — gin adapter (pulls in gin only)
+
+The core `github.com/ConradKash/autodoc` package has **zero external dependencies**.
+
+**Exported API on AutoDoc**
+
+The following methods were added to support adapter subpackages:
+
+- `ServeSpec(w, r)` — serves the OpenAPI JSON spec
+- `ServeSwaggerUI(w, r)` — serves the Swagger UI page
+- `ServeReDoc(w, r)` — serves the ReDoc page
+- `GetTitle()`, `GetSpecPath()`, `GetDocsPath()`, `GetReDocPath()`, `IsEnabled()` — config accessors
+
+The HTML template constants were also exported:
+
+- `autodoc.SwaggerUIHTML`
+- `autodoc.RedocHTML`
+
+**Enhanced chi codegen**
+
+The build-time code generator (`autodoc-gen`) now handles all chi route registration patterns:
+
+- `r.Get("/path", h)`, `r.Post(...)`, `r.Put(...)`, `r.Delete(...)`, `r.Patch(...)`, `r.Head(...)`, `r.Options(...)`
+- `r.Method("GET", "/path", h)` and `r.MethodFunc("GET", "/path", h)`
+- `r.Handle("/path", h)` and `r.HandleFunc("/path", h)` (catch-all, defaults to GET)
+
+**Compilation fixes**
+
+- `cmd/autodoc-gen/main.go`: merged duplicate import blocks; fixed `scanDirs` variable name collision (`*string` reassigned to `[]string`)
+- Replaced deprecated `ioutil.WriteFile` with `os.WriteFile` in `codegen.go`

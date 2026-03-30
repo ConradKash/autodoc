@@ -86,7 +86,21 @@ type Config struct {
 	// Enabled controls whether the doc UI is served. Useful to disable in prod.
 	// Defaults to true.
 	Enabled *bool
+
+	// Models is a list of reflect.Types to include in the schema.
+	// These models will be generated even if not used by any handler.
+	Models []reflect.Type
 }
+
+// WithModel adds a type to the schema regardless of whether it's used by any handler.
+func WithModel[T any]() ConfigOption {
+	return func(c *Config) {
+		c.Models = append(c.Models, reflect.TypeOf((*T)(nil)).Elem())
+	}
+}
+
+// ConfigOption configures the AutoDoc config.
+type ConfigOption func(*Config)
 
 func (c *Config) defaults() {
 	if c.Version == "" {
@@ -281,7 +295,10 @@ type AutoDoc struct {
 }
 
 // New creates a new AutoDoc instance.
-func New(cfg Config) *AutoDoc {
+func New(cfg Config, opts ...ConfigOption) *AutoDoc {
+	for _, o := range opts {
+		o(&cfg)
+	}
 	cfg.defaults()
 	return &AutoDoc{
 		cfg:       cfg,
@@ -516,6 +533,13 @@ func (a *AutoDoc) buildSpec(routes []*RouteInfo) map[string]interface{} {
 		components["schemas"] = map[string]interface{}{}
 	}
 	components["schemas"].(map[string]interface{})["Problem"] = problemSchema()
+
+	// Extra models specified in config.
+	for _, t := range a.cfg.Models {
+		if t != nil {
+			a.gen.schemaRef(t, components["schemas"].(map[string]interface{}))
+		}
+	}
 
 	if len(a.cfg.SecuritySchemes) > 0 {
 		components["securitySchemes"] = a.cfg.SecuritySchemes
@@ -820,11 +844,11 @@ func problemSchema() map[string]interface{} {
 		"type":        "object",
 		"description": "Problem Details (RFC 9457)",
 		"properties": map[string]interface{}{
-			"type":     map[string]interface{}{"type": "string", "format": "uri"},
-			"title":    map[string]interface{}{"type": "string"},
-			"status":   map[string]interface{}{"type": "integer"},
-			"detail":   map[string]interface{}{"type": "string"},
-			"instance": map[string]interface{}{"type": "string", "format": "uri"},
+			"type":     map[string]interface{}{"type": "string", "format": "uri", "description": "A URI reference that identifies the problem type"},
+			"title":    map[string]interface{}{"type": "string", "description": "A short, human-readable summary of the problem"},
+			"status":   map[string]interface{}{"type": "integer", "description": "The HTTP status code"},
+			"detail":   map[string]interface{}{"type": "string", "description": "A human-readable explanation specific to this occurrence of the problem"},
+			"instance": map[string]interface{}{"type": "string", "format": "uri", "description": "A URI reference that identifies the specific occurrence of the problem"},
 		},
 		"required": []string{"title", "status"},
 	}

@@ -2,6 +2,7 @@
 package autodoc
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -46,6 +47,8 @@ type CodeGen struct {
 	ScanDirs []string
 	// Config to use for the generated spec
 	Config Config
+	// modelSchemas stores pre-generated schemas for models specified by name
+	modelSchemas map[string]map[string]interface{}
 }
 
 // Route represents a single discovered route at build time.
@@ -64,9 +67,10 @@ type Route struct {
 // NewCodeGen creates a new code generation engine.
 func NewCodeGen(cfg Config, routerType string) *CodeGen {
 	return &CodeGen{
-		RouterType: routerType,
-		Config:     cfg,
-		ScanDirs:   []string{"."},
+		RouterType:   routerType,
+		Config:       cfg,
+		ScanDirs:     []string{"."},
+		modelSchemas: make(map[string]map[string]interface{}),
 	}
 }
 
@@ -102,7 +106,61 @@ func (cg *CodeGen) Scan() ([]Route, error) {
 		}
 	}
 
+	// If models are specified as strings, resolve them to reflect.Type
+	cg.resolveModelTypes()
+
 	return routes, nil
+}
+
+// resolveModelTypes scans for model types and collects struct definitions
+func (cg *CodeGen) resolveModelTypes() {
+	// Collect all struct type names from scanned files
+	for _, dir := range cg.ScanDirs {
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+
+			fset := token.NewFileSet()
+			node, err := parser.ParseFile(fset, path, nil, parser.AllErrors)
+			if err != nil {
+				return nil
+			}
+
+			ast.Inspect(node, func(n ast.Node) bool {
+				if typeSpec, ok := n.(*ast.TypeSpec); ok {
+					typeName := typeSpec.Name.Name
+					// If this type is in our Models list, generate its schema
+					for i, m := range cg.Config.Models {
+						if name, ok := m.(string); ok && name == typeName {
+							// Generate schema from AST
+							if structType, ok := typeSpec.Type.(*ast.StructType); ok {
+								schema := cg.buildSchemaFromAST(structType)
+								// Add to the schemas map (will be done in Generate)
+								cg.modelSchemas[typeName] = schema
+								cg.Config.Models[i] = nil // Mark as handled
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			return nil
+		})
+	}
+
+	// Clean up nil entries from Models
+	var cleaned []interface{}
+	for _, m := range cg.Config.Models {
+		if m != nil {
+			cleaned = append(cleaned, m)
+		}
+	}
+	cg.Config.Models = cleaned
 }
 
 // extractRoutes finds route registration calls in the AST.
@@ -327,6 +385,126 @@ func convertGinPatternToOAS(pattern string) string {
 	return b.String()
 }
 
+// buildSchemaFromAST converts an AST struct type to a JSON schema map
+func (cg *CodeGen) buildSchemaFromAST(structType *ast.StructType) map[string]interface{} {
+	props := map[string]interface{}{}
+	var required []string
+
+	if structType.Fields == nil {
+		return map[string]interface{}{
+			"type":       "object",
+			"properties": props,
+		}
+	}
+
+	for _, field := range structType.Fields.List {
+		if len(field.Names) == 0 {
+			continue // embedded or anonymous field
+		}
+		fieldName := field.Names[0].Name
+		if !ast.IsExported(fieldName) {
+			continue
+		}
+
+		// Get JSON tag
+		jsonTag := "json"
+		if field.Tag != nil {
+			tagStr := field.Tag.Value
+			if strings.Contains(tagStr, "json:") {
+				start := strings.Index(tagStr, "json:")
+				rest := tagStr[start+5:]
+				end := strings.IndexAny(rest, ",`")
+				if end > 0 {
+					jsonTag = rest[:end]
+				}
+			}
+		}
+		// Handle "-" to skip
+		if jsonTag == "-" {
+			continue
+		}
+		// Handle omitempty
+		omitempty := strings.Contains(jsonTag, "omitempty")
+		name := jsonTag
+		if idx := strings.Index(name, ","); idx > 0 {
+			name = name[:idx]
+		}
+		if name == "" {
+			name = fieldName
+		}
+
+		// Get field type schema
+		fieldSchema := cg.astTypeToSchema(field.Type)
+
+		// Required check (pointer or omitempty = optional)
+		if !omitempty && field.Type.(*ast.StarExpr) == nil {
+			required = append(required, name)
+		}
+
+		props[name] = fieldSchema
+	}
+
+	result := map[string]interface{}{
+		"type":       "object",
+		"properties": props,
+	}
+	if len(required) > 0 {
+		result["required"] = required
+	}
+	return result
+}
+
+// astTypeToSchema converts an AST type expression to a JSON schema
+func (cg *CodeGen) astTypeToSchema(expr ast.Expr) map[string]interface{} {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		switch t.Name {
+		case "string":
+			return map[string]interface{}{"type": "string"}
+		case "int", "int8", "int16", "int32":
+			return map[string]interface{}{"type": "integer", "format": "int32"}
+		case "int64":
+			return map[string]interface{}{"type": "integer", "format": "int64"}
+		case "uint", "uint8", "uint16", "uint32":
+			return map[string]interface{}{"type": "integer", "format": "int32", "minimum": 0}
+		case "uint64":
+			return map[string]interface{}{"type": "integer", "minimum": 0}
+		case "float32":
+			return map[string]interface{}{"type": "number", "format": "float"}
+		case "float64":
+			return map[string]interface{}{"type": "number", "format": "double"}
+		case "bool":
+			return map[string]interface{}{"type": "boolean"}
+		case "byte":
+			return map[string]interface{}{"type": "string", "format": "byte"}
+		case "rune":
+			return map[string]interface{}{"type": "string"}
+		default:
+			// Assume it's a reference to another type
+			return map[string]interface{}{"$ref": "#/components/schemas/" + t.Name}
+		}
+	case *ast.StarExpr:
+		// Pointer - make nullable
+		schema := cg.astTypeToSchema(t.X)
+		schema["nullable"] = true
+		return schema
+	case *ast.ArrayType:
+		return map[string]interface{}{
+			"type":  "array",
+			"items": cg.astTypeToSchema(t.Elt),
+		}
+	case *ast.MapType:
+		return map[string]interface{}{
+			"type":                 "object",
+			"additionalProperties": cg.astTypeToSchema(t.Value),
+		}
+	case *ast.StructType:
+		return cg.buildSchemaFromAST(t)
+	default:
+		return map[string]interface{}{}
+	}
+}
+
 // Generate writes the generated Go code to OutputFile.
 func (cg *CodeGen) Generate(routes []Route) error {
 	// Build the OpenAPI spec from routes
@@ -343,6 +521,34 @@ func (cg *CodeGen) Generate(routes []Route) error {
 	specJSON, err := doc.SpecJSON()
 	if err != nil {
 		return fmt.Errorf("failed to generate spec: %w", err)
+	}
+
+	// If we have pre-built model schemas, inject them into the spec
+	if len(cg.modelSchemas) > 0 {
+		var spec map[string]interface{}
+		if err := json.Unmarshal(specJSON, &spec); err != nil {
+			return fmt.Errorf("failed to parse spec: %w", err)
+		}
+
+		components, ok := spec["components"].(map[string]interface{})
+		if !ok {
+			components = map[string]interface{}{}
+			spec["components"] = components
+		}
+		schemas, ok := components["schemas"].(map[string]interface{})
+		if !ok {
+			schemas = map[string]interface{}{}
+			components["schemas"] = schemas
+		}
+
+		for name, schema := range cg.modelSchemas {
+			schemas[name] = schema
+		}
+
+		specJSON, err = json.MarshalIndent(spec, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to re-marshal spec: %w", err)
+		}
 	}
 
 	// Write the spec to a separate file if requested

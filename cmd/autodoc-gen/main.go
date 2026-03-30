@@ -10,10 +10,12 @@
 //	-router       Router type: "chi" or "http" (required)
 //	-out          Output Go file (default: "docs_gen.go")
 //	-spec         Output OpenAPI spec file (optional, default: no separate file)
+//	-spec-yaml    Output OpenAPI spec YAML file (optional)
 //	-pkg          Package name (default: current package)
 //	-title        API Title (default: "API")
 //	-version      API Version (default: "1.0.0")
 //	-scan         Directories to scan (default: ".")
+//	-models       Comma-separated model type names to include in schema (e.g., "User,Order")
 package main
 
 import (
@@ -38,6 +40,7 @@ func main() {
 		scanFlag           = flag.String("scan", ".", "Comma-separated dirs to scan")
 		docsPath           = flag.String("docs", "/docs", "Swagger UI path")
 		specPath           = flag.String("spec-path", "/openapi.json", "OpenAPI spec path")
+		modelsFlag         = flag.String("models", "", "Comma-separated model type names to include in schema (e.g., 'User,Order,Product')")
 	)
 	flag.Parse()
 
@@ -70,6 +73,17 @@ func main() {
 		Version:  *version,
 		DocsPath: *docsPath,
 		SpecPath: *specPath,
+	}
+
+	// Parse models - these will be resolved during code generation
+	if *modelsFlag != "" {
+		modelNames := strings.Split(*modelsFlag, ",")
+		for _, name := range modelNames {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				cfg.Models = append(cfg.Models, name) // Store name as string for codegen
+			}
+		}
 	}
 
 	cg := autodoc.NewCodeGen(cfg, *routerType)

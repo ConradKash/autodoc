@@ -87,9 +87,10 @@ type Config struct {
 	// Defaults to true.
 	Enabled *bool
 
-	// Models is a list of reflect.Types to include in the schema.
+	// Models is a list of types to include in the schema.
+	// Accepts either reflect.Type or string (type name for codegen).
 	// These models will be generated even if not used by any handler.
-	Models []reflect.Type
+	Models []interface{}
 }
 
 // WithModel adds a type to the schema regardless of whether it's used by any handler.
@@ -536,8 +537,15 @@ func (a *AutoDoc) buildSpec(routes []*RouteInfo) map[string]interface{} {
 
 	// Extra models specified in config.
 	for _, t := range a.cfg.Models {
-		if t != nil {
-			a.gen.schemaRef(t, components["schemas"].(map[string]interface{}))
+		if t == nil {
+			continue
+		}
+		switch v := t.(type) {
+		case reflect.Type:
+			a.gen.schemaRef(v, components["schemas"].(map[string]interface{}))
+		case string:
+			// For codegen, store model name to be resolved later
+			// This is handled in code generation phase
 		}
 	}
 

@@ -30,10 +30,10 @@ import (
 
 func main() {
 	var (
-		routerType         = flag.String("router", "", "Router type: chi or http (required)")
-		outputFile         = flag.String("out", "docs_gen.go", "Output Go file")
-		specOutputFile     = flag.String("spec", "", "Output OpenAPI spec JSON file (optional)")
-		specYAMLOutputFile = flag.String("spec-yaml", "", "Output OpenAPI spec YAML file (optional)")
+		routerType         = flag.String("router", "", "Router type: chi, gin or http (required)")
+		outputFile         = flag.String("out", "cmd/doc/docs_gen.go", "Output Go file (default: cmd/doc/docs_gen.go)")
+		specOutputFile     = flag.String("spec", "cmd/doc/openapi.json", "Output OpenAPI spec JSON file (default: cmd/doc/openapi.json)")
+		specYAMLOutputFile = flag.String("spec-yaml", "cmd/doc/openapi.yaml", "Output OpenAPI spec YAML file (default: cmd/doc/openapi.yaml)")
 		pkgName            = flag.String("pkg", "", "Package name (auto-detected if empty)")
 		title              = flag.String("title", "API", "API title")
 		version            = flag.String("version", "1.0.0", "API version")
@@ -42,6 +42,11 @@ func main() {
 		specPath           = flag.String("spec-path", "/openapi.json", "OpenAPI spec path")
 		modelsFlag         = flag.String("models", "", "Comma-separated model type names to include in schema (e.g., 'User,Order,Product')")
 	)
+	// Ensure cmd/doc directory exists
+	docDir := "cmd/doc"
+	if err := os.MkdirAll(docDir, 0755); err != nil {
+		log.Fatalf("error creating docs directory %s: %v", docDir, err)
+	}
 	flag.Parse()
 
 	// Validate required flags

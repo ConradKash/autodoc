@@ -54,6 +54,8 @@ See [autodoc.go](autodoc.go) and [autodoc_test.go](autodoc_test.go) for advanced
 
 autodoc supports the Gin framework via the `autodoc/gin` subpackage:
 
+### Quick Example
+
 ```go
 import (
     "github.com/gin-gonic/gin"
@@ -76,6 +78,51 @@ ginAdapter.Mount()
 
 ginAdapter.Engine.Run(":8080")
 ```
+
+### Usage Notes
+- Use `ginAdapter.Handle` or `ginAdapter.HandleFunc` to register routes and document them.
+- Path parameters like `:id` are automatically converted to OpenAPI `{id}` syntax in the generated spec.
+- Call `ginAdapter.Mount()` to serve `/docs`, `/docs/redoc`, and `/openapi.json` endpoints.
+- All autodoc options (e.g., `WithSummary`, `WithRequestOf`, `WithResponseOf`) are supported.
+- You can use the returned `ginAdapter.Engine` as your main Gin engine.
+
+### Advanced: Using an Existing gin.Engine
+
+If you want to use an existing `gin.Engine`:
+
+```go
+engine := gin.Default()
+doc := autodoc.New(autodoc.Config{Title: "Gin API", Version: "1.0.0"})
+ginAdapter := autodocgin.NewGinAdapter(doc)
+ginAdapter.Engine = engine // use your own engine
+// Register routes as above
+// ...
+ginAdapter.Mount()
+engine.Run(":8080")
+```
+
+### Type-Safe Documentation
+
+You can use autodoc's type-safe helpers for request/response types:
+
+```go
+ginAdapter.Handle("POST", "/users", createUserHandler,
+    autodoc.WithRequestOf[CreateUserRequest](),
+    autodoc.WithResponseOf[UserResponse](),
+)
+```
+
+### OpenAPI Path Parameters
+
+Gin's `:param` syntax is automatically converted to OpenAPI `{param}` in the generated spec. For example, `/users/:id` becomes `/users/{id}`.
+
+### Serving Docs
+
+- `/docs` — Swagger UI
+- `/docs/redoc` — ReDoc
+- `/openapi.json` — Raw OpenAPI 3.0 spec
+
+You can customize these paths via the `autodoc.Config`.
 
 ## Chi Framework Integration
 
@@ -140,6 +187,28 @@ This parses your `r.Get()`, `r.Post()`, `r.Method()` calls (or `mux.HandleFunc("
 | `-scan` | Comma-separated dirs to scan | `.` |
 | `-docs` | Swagger UI path | `/docs` |
 | `-spec-path` | OpenAPI spec path | `/openapi.json` |
+
+### Gin Build-Time Code Generation
+
+autodoc's generator also supports Gin projects. You can generate a static OpenAPI spec and route table from your Gin route registrations.
+
+**Add a generate directive:**
+
+```go
+//go:generate autodoc-gen -router=gin -out=docs_gen.go -spec=openapi.json
+```
+
+Then run:
+
+```bash
+go generate ./...
+```
+
+- This will scan your Gin route registrations (e.g., `r.GET("/users/:id", ...)`, `r.POST(...)`, etc.).
+- Gin’s `:param` syntax is automatically converted to OpenAPI `{param}` in the generated spec.
+- The generated Go file will contain the embedded OpenAPI spec and a static route table for your Gin API.
+
+**CLI flags are the same as for chi/http.**
 
 ## Contributing
 

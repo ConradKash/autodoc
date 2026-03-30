@@ -44,8 +44,8 @@ func main() {
 	if *routerType == "" {
 		log.Fatal("error: -router flag is required (chi or http)")
 	}
-	if *routerType != "chi" && *routerType != "http" {
-		log.Fatal("error: -router must be 'chi' or 'http'")
+	if *routerType != "chi" && *routerType != "http" && *routerType != "gin" {
+		log.Fatal("error: -router must be 'chi' or 'http' or 'gin'")
 	}
 
 	// Auto-detect package name if not provided

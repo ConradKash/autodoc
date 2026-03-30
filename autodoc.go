@@ -39,6 +39,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/goccy/go-yaml"
 )
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -427,6 +429,16 @@ func (a *AutoDoc) SpecJSON() ([]byte, error) {
 	a.specDirty = false
 	a.mu.Unlock()
 
+	return b, nil
+}
+
+// SpecYAML returns the spec as YAML bytes.
+func (a *AutoDoc) SpecYAML() ([]byte, error) {
+	spec := a.Spec()
+	b, err := yaml.Marshal(spec)
+	if err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 

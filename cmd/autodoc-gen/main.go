@@ -28,15 +28,16 @@ import (
 
 func main() {
 	var (
-		routerType     = flag.String("router", "", "Router type: chi or http (required)")
-		outputFile     = flag.String("out", "docs_gen.go", "Output Go file")
-		specOutputFile = flag.String("spec", "", "Output OpenAPI spec file (optional)")
-		pkgName        = flag.String("pkg", "", "Package name (auto-detected if empty)")
-		title          = flag.String("title", "API", "API title")
-		version        = flag.String("version", "1.0.0", "API version")
-		scanFlag       = flag.String("scan", ".", "Comma-separated dirs to scan")
-		docsPath       = flag.String("docs", "/docs", "Swagger UI path")
-		specPath       = flag.String("spec-path", "/openapi.json", "OpenAPI spec path")
+		routerType         = flag.String("router", "", "Router type: chi or http (required)")
+		outputFile         = flag.String("out", "docs_gen.go", "Output Go file")
+		specOutputFile     = flag.String("spec", "", "Output OpenAPI spec JSON file (optional)")
+		specYAMLOutputFile = flag.String("spec-yaml", "", "Output OpenAPI spec YAML file (optional)")
+		pkgName            = flag.String("pkg", "", "Package name (auto-detected if empty)")
+		title              = flag.String("title", "API", "API title")
+		version            = flag.String("version", "1.0.0", "API version")
+		scanFlag           = flag.String("scan", ".", "Comma-separated dirs to scan")
+		docsPath           = flag.String("docs", "/docs", "Swagger UI path")
+		specPath           = flag.String("spec-path", "/openapi.json", "OpenAPI spec path")
 	)
 	flag.Parse()
 
@@ -74,6 +75,7 @@ func main() {
 	cg := autodoc.NewCodeGen(cfg, *routerType)
 	cg.OutputFile = *outputFile
 	cg.SpecOutputFile = *specOutputFile
+	cg.SpecYAMLOutputFile = *specYAMLOutputFile
 	cg.PackageName = *pkgName
 	cg.ScanDirs = scanDirs
 
@@ -85,6 +87,9 @@ func main() {
 	fmt.Printf("✓ Generated %s\n", *outputFile)
 	if *specOutputFile != "" {
 		fmt.Printf("✓ Generated %s\n", *specOutputFile)
+	}
+	if *specYAMLOutputFile != "" {
+		fmt.Printf("✓ Generated %s\n", *specYAMLOutputFile)
 	}
 }
 

@@ -38,6 +38,8 @@ type CodeGen struct {
 	OutputFile string
 	// SpecOutputFile is where to write the OpenAPI spec (optional, separate file)
 	SpecOutputFile string
+	// SpecYAMLOutputFile is where to write the OpenAPI spec as YAML (optional)
+	SpecYAMLOutputFile string
 	// PackageName is the target package name
 	PackageName string
 	// Paths to scan for router registration code
@@ -347,6 +349,17 @@ func (cg *CodeGen) Generate(routes []Route) error {
 	if cg.SpecOutputFile != "" {
 		if err := os.WriteFile(cg.SpecOutputFile, specJSON, 0644); err != nil {
 			return fmt.Errorf("failed to write spec file: %w", err)
+		}
+	}
+
+	// Write the spec as YAML if requested
+	if cg.SpecYAMLOutputFile != "" {
+		specYAML, err := doc.SpecYAML()
+		if err != nil {
+			return fmt.Errorf("failed to generate YAML spec: %w", err)
+		}
+		if err := os.WriteFile(cg.SpecYAMLOutputFile, specYAML, 0644); err != nil {
+			return fmt.Errorf("failed to write YAML spec file: %w", err)
 		}
 	}
 

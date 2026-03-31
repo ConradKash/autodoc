@@ -1,0 +1,4 @@
+{
+  "info": "Gin example setup complete. Contains main.go with two endpoints, go.mod with Gin, and README.md with instructions. Server tested and endpoints respond as expected. Ready for autodoc testing."
+}
+

@@ -2,8 +2,8 @@
 //
 // Usage:
 //
-//	go:generate autodoc-gen -router=chi -out=docs_gen.go -spec=openapi.json
-//	go:generate autodoc-gen -router=http -out=docs_gen.go
+// //go:generate autodoc-gen -router=chi -out=docs_gen.go -spec=openapi.json
+// //go:generate autodoc-gen -router=http -out=docs_gen.go
 //
 // Flags:
 //
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ConradKash/autodoc"
@@ -31,9 +32,9 @@ import (
 func main() {
 	var (
 		routerType         = flag.String("router", "", "Router type: chi, gin or http (required)")
-		outputFile         = flag.String("out", "cmd/doc/docs_gen.go", "Output Go file (default: cmd/doc/docs_gen.go)")
-		specOutputFile     = flag.String("spec", "cmd/doc/openapi.json", "Output OpenAPI spec JSON file (default: cmd/doc/openapi.json)")
-		specYAMLOutputFile = flag.String("spec-yaml", "cmd/doc/openapi.yaml", "Output OpenAPI spec YAML file (default: cmd/doc/openapi.yaml)")
+		outputFile         = flag.String("out", "../doc/docs_gen.go", "Output Go file (default: ../doc/docs_gen.go)")
+		specOutputFile     = flag.String("spec", "../doc/openapi.json", "Output OpenAPI spec JSON file (default: ../doc/openapi.json)")
+		specYAMLOutputFile = flag.String("spec-yaml", "../doc/openapi.yaml", "Output OpenAPI spec YAML file (default: ../doc/openapi.yaml)")
 		pkgName            = flag.String("pkg", "", "Package name (auto-detected if empty)")
 		title              = flag.String("title", "API", "API title")
 		version            = flag.String("version", "1.0.0", "API version")
@@ -42,12 +43,19 @@ func main() {
 		specPath           = flag.String("spec-path", "/openapi.json", "OpenAPI spec path")
 		modelsFlag         = flag.String("models", "", "Comma-separated model type names to include in schema (e.g., 'User,Order,Product')")
 	)
-	// Ensure cmd/doc directory exists
-	docDir := "cmd/doc"
-	if err := os.MkdirAll(docDir, 0755); err != nil {
-		log.Fatalf("error creating docs directory %s: %v", docDir, err)
-	}
 	flag.Parse()
+
+	// Ensure parent directories for all output files exist
+	for _, path := range []string{*outputFile, *specOutputFile, *specYAMLOutputFile} {
+		if path != "" {
+			dir := filepath.Dir(path)
+			if dir != "." && dir != "" {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					log.Fatalf("error creating directory %s: %v", dir, err)
+				}
+			}
+		}
+	}
 
 	// Validate required flags
 	if *routerType == "" {
